@@ -1,0 +1,1 @@
+web: gunicorn CryptoRest.wsgi --log-file -

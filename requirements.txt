@@ -1,0 +1,16 @@
+asn1crypto==0.24.0
+cffi==1.12.2
+cryptography==2.6.1
+Django==2.1.5
+django-cors-headers==2.4.0
+django-rest-framework-redocs==0.0.7
+djangorestframework==3.9.1
+gunicorn==19.9.0
+psycopg2==2.7.6.1
+pyaes==1.6.1
+pycparser==2.19
+pycryptodome==3.7.3
+pyDes==2.0.1
+pytz==2018.9
+six==1.12.0
+whitenoise==4.1.2
