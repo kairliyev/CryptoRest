@@ -91,7 +91,6 @@ WSGI_APPLICATION = 'CryptoRest.wsgi.application'
 # }
 # postgres://ksryqwxtidaptg:a9cf1086d256fced84a2c140c4d5676ed7f44cff85def23be25aa401d5d047d8@ec2-54-228-252-67.eu-west-1.compute.amazonaws.com:5432/d21p1mn2jrk89g
 
-
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
