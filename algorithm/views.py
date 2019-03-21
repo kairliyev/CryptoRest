@@ -268,6 +268,14 @@ def basics(request):
         return e_binary(request)
     elif type == "d_binary":
         return d_binary(request)
+    elif type == "e_caesar":
+        return e_caesar(request)
+    elif type == "d_caesar":
+        return d_caesar(request)
+    elif type == "e_vigenere":
+        return e_vigenere(request)
+    elif type == "d_vigenere":
+        return d_vigenere(request)
 
 
 class AlgorithmList(ListCreateAPIView):
@@ -363,3 +371,124 @@ def d_binary(request):
             "form": cipherFormFilter(request.data["type"])
         }
     }, status=status.HTTP_200_OK)
+
+
+def e_caesar(request):
+    text = request.data["text"]
+    type = request.data["type"]
+
+    key = 'abcdefghijklmnopqrstuvwxyz'
+    result = ''
+
+    n = 3
+
+    for l in text.lower():
+        try:
+            i = (key.index(l) + n) % 26
+            result += key[i]
+        except ValueError:
+            result += l
+
+    return Response({
+        "success": {
+            "text": request.data["text"],
+            "type": type,
+            "encrypted": str(result.lower()),
+            "form": cipherFormFilter(request.data["type"])
+        }
+    }, status=status.HTTP_200_OK)
+
+
+def d_caesar(request):
+    text = request.data["text"]
+    type = request.data["type"]
+
+    key = 'abcdefghijklmnopqrstuvwxyz'
+    result = ''
+
+    n = 3
+
+    for l in text:
+        try:
+            i = (key.index(l) - n) % 26
+            result += key[i]
+        except ValueError:
+            result += l
+
+    return Response({
+        "success": {
+            "text": request.data["text"],
+            "type": type,
+            "decrypted": str(result),
+            "form": cipherFormFilter(request.data["type"])
+        }
+    }, status=status.HTTP_200_OK)
+
+
+def e_vigenere(request):
+    string = request.data["text"]
+    type = request.data["type"]
+
+    string = string.upper()
+    keyword = "AYUSH"
+    key = generateKey(string, keyword)
+    cipher_text = cipherText(string, key)
+
+    return Response({
+        "success": {
+            "text": request.data["text"],
+            "type": type,
+            "encrypted": str(cipher_text.lower()),
+            "form": cipherFormFilter(request.data["type"])
+        }
+    }, status=status.HTTP_200_OK)
+
+
+def d_vigenere(request):
+    string = request.data["text"]
+    type = request.data["type"]
+
+    string = string.upper()
+    keyword = "AYUSH"
+    key = generateKey(string, keyword)
+    cipher_text = string
+
+    return Response({
+        "success": {
+            "text": request.data["text"],
+            "type": type,
+            "decrypted": str(originalText(string, key).lower()),
+            "form": cipherFormFilter(request.data["type"])
+        }
+    }, status=status.HTTP_200_OK)
+
+
+def generateKey(string, key):
+    key = list(key)
+    if len(string) == len(key):
+        return (key)
+    else:
+        for i in range(len(string) -
+                       len(key)):
+            key.append(key[i % len(key)])
+    return ("".join(key))
+
+
+def cipherText(string, key):
+    cipher_text = []
+    for i in range(len(string)):
+        x = (ord(string[i]) +
+             ord(key[i])) % 26
+        x += ord('A')
+        cipher_text.append(chr(x))
+    return ("".join(cipher_text))
+
+
+def originalText(cipher_text, key):
+    orig_text = []
+    for i in range(len(cipher_text)):
+        x = (ord(cipher_text[i]) -
+             ord(key[i]) + 26) % 26
+        x += ord('A')
+        orig_text.append(chr(x))
+    return ("".join(orig_text))
