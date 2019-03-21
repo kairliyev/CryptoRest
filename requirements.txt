@@ -13,4 +13,5 @@ pycryptodome==3.7.3
 pyDes==2.0.1
 pytz==2018.9
 six==1.12.0
+tinyec==0.3.1
 whitenoise==4.1.2
