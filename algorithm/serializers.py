@@ -14,3 +14,10 @@ class CipherSerializers(serializers.ModelSerializer):
     class Meta:
         model = CipherInstructions
         fields = '__all__'
+
+
+class CipherListSerializers(serializers.ModelSerializer):
+
+    class Meta:
+        model = CipherInstructions
+        fields = ('id', 'name', 'algorithm_option' , 'algorithm_class')

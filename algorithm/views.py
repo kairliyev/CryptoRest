@@ -16,6 +16,10 @@ from django.http import HttpResponse
 import base64
 import json
 
+from tinyec import registry
+from Crypto.Cipher import AES
+import hashlib, secrets, binascii
+
 
 def encrypt_aes(aess, key):
     import pyaes
@@ -115,7 +119,9 @@ def algorithmsymmetric(request):
                 "success": {
                     "text": request.data["text"],
                     "type": type,
-                    "encrypted": des(enc, key)}
+                    "encrypted": des(enc, key),
+                    "form": cipherFormFilter(type)
+                }
             }, status=status.HTTP_200_OK)
         else:
             return Response({
@@ -129,7 +135,9 @@ def algorithmsymmetric(request):
                 "success": {
                     "text": request.data["text"],
                     "type": type,
-                    "decrypted": decrypt_des(enc, key)}
+                    "decrypted": decrypt_des(enc, key),
+                    "form": cipherFormFilter(type)
+                }
             }, status=status.HTTP_200_OK)
         else:
             return Response({
@@ -141,10 +149,20 @@ def algorithmsymmetric(request):
 
 
 @api_view(http_method_names=['POST'])
+def algorithmassymetric(request):
+    text = request.data["text"]
+    type = request.data["type"]
+
+    if type == "rsa":
+        return algorithmassymetric_rsa(request)
+    elif type == "ecc":
+        return algorithmassymetric_ecc(request)
+
+
 def algorithmassymetric_rsa(request):
     text = request.data["text"]
     keyPair = RSA.generate(3072)
-
+    print(keyPair)
     pubKey = keyPair.publickey()
     # print(f"Public key:  (n={hex(pubKey.n)}, e={hex(pubKey.e)})")
     pubKeyPEM = pubKey.exportKey()
@@ -154,22 +172,99 @@ def algorithmassymetric_rsa(request):
     privKeyPEM = keyPair.exportKey()
     # print(privKeyPEM)
 
-    msg = b'A message for encryption'
     encryptor = PKCS1_OAEP.new(pubKey)
     encrypted = encryptor.encrypt(text.encode())
     # print("Encrypted:", binascii.hexlify(encrypted))
 
-    return Response({
-        "success": {
-            "public_key": pubKeyPEM.decode('ascii'),
-            "rsa_private_key": privKeyPEM.decode('ascii'),
-            "encrypted": binascii.hexlify(encrypted)}
-    }, status=status.HTTP_200_OK)
+    decryptor = PKCS1_OAEP.new(keyPair)
+    decrypted = decryptor.decrypt(encrypted)
+    print(decryptor)
+    print('Decrypted:', decrypted)
+    if len(str(text)) > 0:
+        return Response({
+            "success": {
+                "public_key": pubKeyPEM.decode('ascii'),
+                "rsa_private_key": privKeyPEM.decode('ascii'),
+                "encrypted": binascii.hexlify(encrypted)}
+        }, status=status.HTTP_200_OK)
+    else:
+        return Response({
+            "error": {
+                "error_type": "text is empty"
+            }
+        }, status=status.HTTP_200_OK)
+
+
+def algorithmassymetric_ecc(request):
+    msg = request.data["text"].encode()
+
+    def encrypt_AES_GCM(msg, secretKey):
+        aesCipher = AES.new(secretKey, AES.MODE_GCM)
+        ciphertext, authTag = aesCipher.encrypt_and_digest(msg)
+        return (ciphertext, aesCipher.nonce, authTag)
+
+    def decrypt_AES_GCM(ciphertext, nonce, authTag, secretKey):
+        aesCipher = AES.new(secretKey, AES.MODE_GCM, nonce)
+        plaintext = aesCipher.decrypt_and_verify(ciphertext, authTag)
+        return plaintext
+
+    def ecc_point_to_256_bit_key(point):
+        sha = hashlib.sha256(int.to_bytes(point.x, 32, 'big'))
+        sha.update(int.to_bytes(point.y, 32, 'big'))
+        return sha.digest()
+
+    curve = registry.get_curve('brainpoolP256r1')
+
+    def encrypt_ECC(msg, pubKey):
+        ciphertextPrivKey = secrets.randbelow(curve.field.n)
+        sharedECCKey = ciphertextPrivKey * pubKey
+        secretKey = ecc_point_to_256_bit_key(sharedECCKey)
+        ciphertext, nonce, authTag = encrypt_AES_GCM(msg, secretKey)
+        ciphertextPubKey = ciphertextPrivKey * curve.g
+        return (ciphertext, nonce, authTag, ciphertextPubKey)
+
+    def decrypt_ECC(encryptedMsg, privKey):
+        (ciphertext, nonce, authTag, ciphertextPubKey) = encryptedMsg
+        sharedECCKey = privKey * ciphertextPubKey
+        secretKey = ecc_point_to_256_bit_key(sharedECCKey)
+        plaintext = decrypt_AES_GCM(ciphertext, nonce, authTag, secretKey)
+        return plaintext
+
+    print("original msg:", msg)
+    privKey = secrets.randbelow(curve.field.n)
+    pubKey = privKey * curve.g
+
+    encryptedMsg = encrypt_ECC(msg, pubKey)
+    encryptedMsgObj = {
+        'ciphertext': binascii.hexlify(encryptedMsg[0]),
+        'nonce': binascii.hexlify(encryptedMsg[1]),
+        'authTag': binascii.hexlify(encryptedMsg[2]),
+        'ciphertextPubKey': hex(encryptedMsg[3].x) + hex(encryptedMsg[3].y % 2)[2:]
+    }
+    print("encrypted msg:", encryptedMsgObj)
+
+    decryptedMsg = decrypt_ECC(encryptedMsg, privKey)
+    print("decrypted msg:", decryptedMsg)
+
+    if len(str(msg, 'utf-8')) > 0:
+        return Response({
+            "success":
+                encryptedMsgObj
+        }, status=status.HTTP_200_OK)
+    else:
+        return Response({
+            "error": {
+                "error_type": "text is empty"
+            }
+        }, status=status.HTTP_200_OK)
 
 
 @api_view(http_method_names=['POST'])
-def algorithmassymetric_dsa(request):
-    pass
+def basics(request):
+    if request.data["type"] == "e_binary":
+        e_binary(request)
+    elif request.data["type"] == "d_binary":
+        d_binary(request)
 
 
 class AlgorithmList(ListCreateAPIView):
@@ -179,8 +274,87 @@ class AlgorithmList(ListCreateAPIView):
         return AlgorithmTypes.objects.all()
 
 
-class CipherList(RetrieveUpdateDestroyAPIView):
-    serializer_class = CipherSerializers
+class CipherList(ListCreateAPIView):
+    serializer_class = CipherListSerializers
 
-    def get_object(self):
-        return CipherInstructions.objects.get(id=self.kwargs['pk'])
+    def get_queryset(self):
+        return CipherInstructions.objects.filter(algorithm_class_id__exact=self.kwargs["pk"])
+
+
+@api_view(http_method_names=['POST'])
+def hash_functions(request):
+    text = request.data["text"]
+    data = text.encode("utf8")
+
+    sha256hash = hashlib.sha256(data).digest()
+    print("SHA-256:   ", binascii.hexlify(sha256hash))
+
+    sha3_256 = hashlib.sha3_256(data).digest()
+    print("SHA3-256:  ", binascii.hexlify(sha3_256))
+
+    blake2s = hashlib.new('blake2s', data).digest()
+    print("BLAKE2s:   ", binascii.hexlify(blake2s))
+
+    ripemd160 = hashlib.new('ripemd160', data).digest()
+    print("RIPEMD-160:", binascii.hexlify(ripemd160))
+
+    if len(text.encode("utf8")) > 0:
+        return Response({
+            "success": {
+                'SHA-256': binascii.hexlify(sha256hash),
+                'SHA3-256': binascii.hexlify(sha3_256),
+                "BLAKE2s": binascii.hexlify(blake2s),
+                "RIPEMD-160:": binascii.hexlify(ripemd160)
+            }
+
+        }, status=status.HTTP_200_OK)
+    else:
+        return Response({
+            "error": {
+                "error_type": "text is empty"
+            }
+        }, status=status.HTTP_200_OK)
+
+
+def text_to_bits(text, encoding='utf-8', errors='surrogatepass'):
+    bits = bin(int(binascii.hexlify(text.encode(encoding, errors)), 16))[2:]
+    return bits.zfill(8 * ((len(bits) + 7) // 8))
+
+
+def text_from_bits(bits, encoding='utf-8', errors='surrogatepass'):
+    n = int(bits, 2)
+    return int2bytes(n).decode(encoding, errors)
+
+
+def int2bytes(i):
+    hex_string = '%x' % i
+    n = len(hex_string)
+    return binascii.unhexlify(hex_string.zfill(n + (n & 1)))
+
+
+def e_binary(request):
+    text = request.data["text"]
+
+    b = text_to_bits(text)
+    return Response({
+        "success": {
+            "text": request.data["text"],
+            "type": type,
+            "encrypted": str(b),
+            "form": cipherFormFilter(request.data["type"])
+        }
+    }, status=status.HTTP_200_OK)
+
+
+def d_binary(request):
+    text = request.data["text"]
+
+    c = text_from_bits(text)
+    return Response({
+        "success": {
+            "text": request.data["text"],
+            "type": type,
+            "decrypted": str(c),
+            "form": cipherFormFilter(request.data["type"])
+        }
+    }, status=status.HTTP_200_OK)
