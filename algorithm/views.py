@@ -261,10 +261,13 @@ def algorithmassymetric_ecc(request):
 
 @api_view(http_method_names=['POST'])
 def basics(request):
-    if request.data["type"] == "e_binary":
-        e_binary(request)
-    elif request.data["type"] == "d_binary":
-        d_binary(request)
+    text = request.data["text"]
+    type = request.data["type"]
+
+    if type == "e_binary":
+        return e_binary(request)
+    elif type == "d_binary":
+        return d_binary(request)
 
 
 class AlgorithmList(ListCreateAPIView):
@@ -334,20 +337,22 @@ def int2bytes(i):
 
 def e_binary(request):
     text = request.data["text"]
+    type = request.data["type"]
 
     b = text_to_bits(text)
     return Response({
         "success": {
-            "text": request.data["text"],
+            "text": text,
             "type": type,
             "encrypted": str(b),
-            "form": cipherFormFilter(request.data["type"])
+            "form": cipherFormFilter("e_binary")
         }
     }, status=status.HTTP_200_OK)
 
 
 def d_binary(request):
     text = request.data["text"]
+    type = request.data["type"]
 
     c = text_from_bits(text)
     return Response({
