@@ -84,7 +84,7 @@ def algorithmsymmetric(request):
                 "success": {
                     "text": request.data["text"],
                     "type": request.data["type"],
-                    "encrypted": encrypt_aes(enc, key),
+                    "output": encrypt_aes(enc, key),
                     "form": cipherFormFilter(request.data["type"])
                 }
             }, status=status.HTTP_200_OK)
@@ -100,7 +100,7 @@ def algorithmsymmetric(request):
                 "success": {
                     "text": request.data["text"],
                     "type": request.data["type"],
-                    "decrypted": decrypt_aes(enc, key),
+                    "output": decrypt_aes(enc, key),
                     "form": cipherFormFilter(request.data["type"])
                 }
             }, status=status.HTTP_200_OK)
@@ -119,7 +119,7 @@ def algorithmsymmetric(request):
                 "success": {
                     "text": request.data["text"],
                     "type": type,
-                    "encrypted": des(enc, key),
+                    "output": des(enc, key),
                     "form": cipherFormFilter(type)
                 }
             }, status=status.HTTP_200_OK)
@@ -135,7 +135,7 @@ def algorithmsymmetric(request):
                 "success": {
                     "text": request.data["text"],
                     "type": type,
-                    "decrypted": decrypt_des(enc, key),
+                    "output": decrypt_des(enc, key),
                     "form": cipherFormFilter(type)
                 }
             }, status=status.HTTP_200_OK)
@@ -180,19 +180,18 @@ def algorithmassymetric_rsa(request):
     decrypted = decryptor.decrypt(encrypted)
     print(decryptor)
     print('Decrypted:', decrypted)
+
+    out = "public key: %s \n rsa_private_key: %s \n encrypted: %s \n" % (
+    str(pubKeyPEM.decode('ascii')), str(privKeyPEM.decode('ascii')), binascii.hexlify(encrypted))
+
     if len(str(text)) > 0:
         return Response({
             "success": {
-                "public_key": pubKeyPEM.decode('ascii'),
-                "rsa_private_key": privKeyPEM.decode('ascii'),
-                "encrypted": binascii.hexlify(encrypted)}
-        }, status=status.HTTP_200_OK)
-    else:
-        return Response({
-            "error": {
-                "error_type": "text is empty"
-            }
-        }, status=status.HTTP_200_OK)
+                "text": text,
+                "type": request.data["type"],
+                "output": out,
+                "form": cipherFormFilter(request.data["type"])
+            }}, status=status.HTTP_200_OK)
 
 
 def algorithmassymetric_ecc(request):
@@ -235,28 +234,33 @@ def algorithmassymetric_ecc(request):
     pubKey = privKey * curve.g
 
     encryptedMsg = encrypt_ECC(msg, pubKey)
-    encryptedMsgObj = {
-        'ciphertext': binascii.hexlify(encryptedMsg[0]),
-        'nonce': binascii.hexlify(encryptedMsg[1]),
-        'authTag': binascii.hexlify(encryptedMsg[2]),
-        'ciphertextPubKey': hex(encryptedMsg[3].x) + hex(encryptedMsg[3].y % 2)[2:]
-    }
-    print("encrypted msg:", encryptedMsgObj)
+    # encryptedMsgObj = {
+    #     'ciphertext': binascii.hexlify(encryptedMsg[0]) + '\n',
+    #     'nonce': binascii.hexlify(encryptedMsg[1]) + '\n',
+    #     'authTag': binascii.hexlify(encryptedMsg[2])+ '\n',
+    #     'ciphertextPubKey': hex(encryptedMsg[3].x) + hex(encryptedMsg[3].y % 2)[2:] + '\n'
+    # }
+
+    out = "ciphertext: %s \n nonse: %s \n, authTag: %s \n, ciphertextPubkey: %s" % (str(binascii.hexlify(encryptedMsg[0])), binascii.hexlify(encryptedMsg[1]), binascii.hexlify(encryptedMsg[2]), str(hex(encryptedMsg[3].x) + hex(encryptedMsg[3].y % 2)[2:]))
+    # print("encrypted msg:", encryptedMsgObj)
 
     decryptedMsg = decrypt_ECC(encryptedMsg, privKey)
     print("decrypted msg:", decryptedMsg)
 
     if len(str(msg, 'utf-8')) > 0:
         return Response({
-            "success":
-                encryptedMsgObj
-        }, status=status.HTTP_200_OK)
+            "success": {
+                "text": request.data["text"],
+                "type": request.data["type"],
+                "output": str(out),
+                "form": cipherFormFilter(request.data["type"])
+        }}, status=status.HTTP_200_OK)
     else:
         return Response({
             "error": {
                 "error_type": "text is empty"
             }
-        }, status=status.HTTP_200_OK)
+        }, status=status.HTTP_400_BAD_REQUEST)
 
 
 @api_view(http_method_names=['POST'])
@@ -309,22 +313,22 @@ def hash_functions(request):
     ripemd160 = hashlib.new('ripemd160', data).digest()
     print("RIPEMD-160:", binascii.hexlify(ripemd160))
 
+    out = "SHA-256: %s \n SHA3-256: %s \n BLAKE2s: %s \n RIPEMD-160: %s \n " % (binascii.hexlify(sha256hash), binascii.hexlify(sha3_256), binascii.hexlify(blake2s), binascii.hexlify(ripemd160))
+
     if len(text.encode("utf8")) > 0:
         return Response({
             "success": {
-                'SHA-256': binascii.hexlify(sha256hash),
-                'SHA3-256': binascii.hexlify(sha3_256),
-                "BLAKE2s": binascii.hexlify(blake2s),
-                "RIPEMD-160:": binascii.hexlify(ripemd160)
-            }
-
-        }, status=status.HTTP_200_OK)
+                "text": request.data["text"],
+                "type": request.data["type"],
+                "output": str(out),
+                "form": cipherFormFilter(request.data["type"])
+            }}, status=status.HTTP_200_OK)
     else:
         return Response({
             "error": {
                 "error_type": "text is empty"
             }
-        }, status=status.HTTP_200_OK)
+        }, status=status.HTTP_400_BAD_REQUEST)
 
 
 def text_to_bits(text, encoding='utf-8', errors='surrogatepass'):
@@ -352,7 +356,7 @@ def e_binary(request):
         "success": {
             "text": text,
             "type": type,
-            "encrypted": str(b),
+            "output": str(b),
             "form": cipherFormFilter("e_binary")
         }
     }, status=status.HTTP_200_OK)
@@ -367,7 +371,7 @@ def d_binary(request):
         "success": {
             "text": request.data["text"],
             "type": type,
-            "decrypted": str(c),
+            "output": str(c),
             "form": cipherFormFilter(request.data["type"])
         }
     }, status=status.HTTP_200_OK)
@@ -393,7 +397,7 @@ def e_caesar(request):
         "success": {
             "text": request.data["text"],
             "type": type,
-            "encrypted": str(result.lower()),
+            "output": str(result.lower()),
             "form": cipherFormFilter(request.data["type"])
         }
     }, status=status.HTTP_200_OK)
@@ -419,7 +423,7 @@ def d_caesar(request):
         "success": {
             "text": request.data["text"],
             "type": type,
-            "decrypted": str(result),
+            "output": str(result),
             "form": cipherFormFilter(request.data["type"])
         }
     }, status=status.HTTP_200_OK)
@@ -438,7 +442,7 @@ def e_vigenere(request):
         "success": {
             "text": request.data["text"],
             "type": type,
-            "encrypted": str(cipher_text.lower()),
+            "output": str(cipher_text.lower()),
             "form": cipherFormFilter(request.data["type"])
         }
     }, status=status.HTTP_200_OK)
@@ -457,7 +461,7 @@ def d_vigenere(request):
         "success": {
             "text": request.data["text"],
             "type": type,
-            "decrypted": str(originalText(string, key).lower()),
+            "output": str(originalText(string, key).lower()),
             "form": cipherFormFilter(request.data["type"])
         }
     }, status=status.HTTP_200_OK)
